@@ -98,7 +98,7 @@ export class AltaBankaApi {
       }
     ) as FetchResponse & { body: string }
 
-    const transactions = parseTransactions(response.body, fromDate)
+    const transactions = parseTransactions(response.body, fromDate, accountId)
 
     console.debug('fetchTransactions', sanitize(transactions, false))
 
@@ -142,7 +142,7 @@ export class AltaBankaApi {
       }
     ) as FetchResponse & { body: string }
 
-    const transactions = parseTransactions(response.body, fromDate)
+    const transactions = parseTransactions(response.body, fromDate, accountId)
 
     console.debug('fetchCardTransactions', sanitize(transactions, false))
 
