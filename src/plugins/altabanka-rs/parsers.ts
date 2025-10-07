@@ -56,9 +56,6 @@ export function parseTransactions (body: string, fromDate: Date, accountId?: str
   const html = cheerio.load(body)
   const transactionsHtml = html('#transaction-view-content').find('.pageable-content')
 
-  // Counter for duplicate transactions (to distinguish multiple purchases with same parameters)
-  const seenTransactions = new Map<string, number>()
-
   return transactionsHtml.toArray().map(transactionHtml => {
     const html = cheerio.load(transactionHtml)
 
@@ -80,13 +77,16 @@ export function parseTransactions (body: string, fromDate: Date, accountId?: str
     // - Address/merchant - stays the same
     // - Currency - stays the same
     // - Account ID - to distinguish transactions on different accounts
-    // - Date with 3-day window - to distinguish transactions at different times
-    // - Counter - to distinguish multiple identical purchases within the same period
+    // - Date with 3-day window - allows date to shift by 1-2 days during pending->executed
+    //
+    // NOTE: Multiple identical transactions on the same day will have the same ID and may be deduplicated.
+    // This is an acceptable trade-off to avoid dependence on bank IDs that change between pending and executed states.
+    // In practice, it's rare to have 2+ identical transactions (same amount, merchant, date) within 3 days.
 
     // Use 3-day window: if date shifts by 1-2 days during pending->executed, ID remains the same
     const dateKey = Math.floor(normalizedDate.getTime() / (3 * 24 * 60 * 60 * 1000))
 
-    const baseIdString = [
+    const idString = [
       accountId ?? 'unknown',
       normalizedAmount.toFixed(2),
       currency ?? 'RSD',
@@ -94,12 +94,6 @@ export function parseTransactions (body: string, fromDate: Date, accountId?: str
       dateKey.toString()
     ].join('|')
 
-    // Count how many times we've seen this transaction
-    const count = seenTransactions.get(baseIdString) ?? 0
-    seenTransactions.set(baseIdString, count + 1)
-
-    // Add counter to ID to distinguish multiple identical transactions
-    const idString = count > 0 ? `${baseIdString}|${count}` : baseIdString
     const stableId = createHash('md5').update(idString).digest('hex').substring(0, 16)
 
     // Debug logging for ID generation debugging
@@ -109,8 +103,7 @@ export function parseTransactions (body: string, fromDate: Date, accountId?: str
       amount: normalizedAmount,
       address: address?.substring(0, 30),
       dateKey,
-      count,
-      idString: idString.substring(0, 50) + '...'
+      idString: idString.substring(0, 60) + '...'
     })
 
     return {
