@@ -4,9 +4,10 @@ import get from '../../types/get'
 import { isSupportedToken, SupportedTokenInfo, TokenInfo } from './config'
 import { delay } from '../../common/utils'
 
-const MAX_RPS = 3
+const MAX_RPS = 5
 
 export interface Preferences {
+  apiKey: string
   wallets: string
 }
 
@@ -42,10 +43,15 @@ export interface Transfer {
 
 export class TronscanApi {
   private readonly baseUrl: string
+  private apiKey?: string
   private activeList: Array<Promise<unknown>> = []
 
   constructor (options: { baseUrl: string }) {
     this.baseUrl = options.baseUrl
+  }
+
+  setApiKey (apiKey: string): void {
+    this.apiKey = apiKey
   }
 
   private async fetchApi<T>(
@@ -78,12 +84,20 @@ export class TronscanApi {
     url: string,
     predicate?: (x: FetchResponse) => boolean
   ): Promise<FetchResponse> {
-    const response = await fetchJson(this.baseUrl + url)
+    const headers: Record<string, string> = {}
 
-    if (predicate) {
+    if (this.apiKey != null) {
+      headers['TRON-PRO-API-KEY'] = this.apiKey
+    }
+
+    const response = await fetchJson(this.baseUrl + url, {
+      headers
+    })
+
+    if (predicate != null) {
       this.validateResponse(
         response,
-        response => !get(response.body, 'error') && predicate(response)
+        response => !(get(response.body, 'error') != null) && predicate(response)
       )
     }
 
@@ -94,7 +108,7 @@ export class TronscanApi {
     response: FetchResponse,
     predicate?: (x: FetchResponse) => boolean
   ): void {
-    console.assert(!predicate || predicate(response), 'non-successful response')
+    console.assert((predicate == null) || predicate(response), 'non-successful response')
   }
 
   public async fetchTokens (wallet: string): Promise<SupportedTokenInfo[]> {

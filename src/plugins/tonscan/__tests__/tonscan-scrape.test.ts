@@ -8,6 +8,7 @@ describe('scrape', () => {
   }))
 
   it('should hit the mocks and return results', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { scrape } = require('../index')
     mockEndPoints()
 

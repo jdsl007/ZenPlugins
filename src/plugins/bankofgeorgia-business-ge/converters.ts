@@ -45,7 +45,7 @@ function addMatchingConversion (record: AccountRecord, transaction: ZenMoneyTran
     r.EntryDate === record.EntryDate &&
     r.DocumentNomination === record.DocumentNomination
   )
-  if (matchingRecord) {
+  if (matchingRecord != null) {
     transaction.movements.push(createMovement(matchingRecord, matchingRecord.EntryAmount))
   }
 }
@@ -102,6 +102,7 @@ export function convertToZenMoneyTransaction (record: AccountRecord, allRecords:
 
     case 'COM':
     case 'FEE':
+    case 'VE': // Verification Entry - bank fee for document/certificate
       // commission or fee
       transaction.movements[0].fee = (transaction.movements[0].sum != null) ? -transaction.movements[0].sum : 0
       transaction.movements[0].sum = 0

@@ -52,6 +52,7 @@ function cleanMerchantTitle (text: string | null): string | null {
   }
 
   const keywordsToRemove = [...flatten(Object.values(transactionTypeStrings)), '₸']
+  keywordsToRemove.push('Сумма в обработке')
   let cleanedText = text
 
   for (const keyword of keywordsToRemove) {
@@ -101,7 +102,7 @@ function isTransactionToSkip (rawTransaction: StatementTransaction): boolean {
 
 function generateTransactionId (date: string, sum: string | null, description: string | null): string {
   const hash = createHash('sha1')
-  hash.update(`${date}_${sum}_${description ?? ''}`)
+  hash.update(`${date}_${sum ?? ''}_${description ?? ''}`)
   return hash.digest('hex').slice(0, 12)
 }
 
@@ -128,17 +129,19 @@ export function convertPdfStatementTransaction (rawTransaction: StatementTransac
     sum = convertCurrency(currencyRates, sum, invoice.instrument, 'KZT')
   }
 
-  if (invoice && invoice.sum === sum && instrument === rawAccount.instrument) {
+  if ((invoice != null) && invoice.sum === sum && instrument === rawAccount.instrument) {
     invoice = null
   }
 
+  const merchantFullTitle = cleanMerchantTitle(rawTransaction.description)
   const baseMovement: Movement = {
-    id: generateTransactionId(rawTransaction.date, rawTransaction.originalAmount, rawTransaction.description),
+    id: generateTransactionId(rawTransaction.date, rawTransaction.originalAmount, merchantFullTitle),
     account: { id: rawAccount.id },
     invoice,
     sum,
     fee: 0
   }
+  console.log('ID транзакции:', baseMovement.id, 'Исходная сумма:', rawTransaction.originalAmount, 'Описание:', merchantFullTitle)
 
   const parsedType = parseTransactionType(rawTransaction.originString)
   if (parsedType === null) {
@@ -154,7 +157,7 @@ export function convertPdfStatementTransaction (rawTransaction: StatementTransac
     } else if (parsedType === transactionType.TRANSFER && rawTransaction.description !== null && rawTransaction.description.includes('KZ')) {
       type = AccountType.deposit
       const syncIdMatch = rawTransaction.description.match(/KZ[A-Z0-9]{15}/)
-      if (syncIdMatch) {
+      if (syncIdMatch != null) {
         syncIds = [syncIdMatch[0]]
       }
     } else {
@@ -177,7 +180,6 @@ export function convertPdfStatementTransaction (rawTransaction: StatementTransac
     movements = [baseMovement]
   }
 
-  const merchantFullTitle = cleanMerchantTitle(rawTransaction.description)
   let comment = null
 
   if (merchantFullTitle !== null) {
@@ -190,12 +192,14 @@ export function convertPdfStatementTransaction (rawTransaction: StatementTransac
     }
   }
 
+  const hold = rawTransaction.originString.includes('Сумма в обработке')
+
   return {
     statementUid: rawTransaction.statementUid,
     transaction: {
       comment,
       movements,
-      hold: rawTransaction.hold,
+      hold: hold,
       date: new Date(rawTransaction.date),
       merchant: merchantFullTitle !== null
         ? {

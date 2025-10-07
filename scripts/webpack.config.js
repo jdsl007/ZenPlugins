@@ -1,13 +1,12 @@
 const { DefinePlugin, optimize: { LimitChunkCountPlugin } } = require('webpack')
 const CaseSensitivePathsPlugin = require('case-sensitive-paths-webpack-plugin')
-const ESLintPlugin = require('eslint-webpack-plugin')
 const {
   resolvePlugin,
   resolveFromRoot,
   resolveCommonFiles
 } = require('./pathResolvers')
 const fs = require('fs')
-const TerserPlugin = require('terser-webpack-plugin')
+const { EsbuildPlugin } = require('esbuild-loader')
 const WebpackObfuscator = require('webpack-obfuscator')
 const NodePolyfillPlugin = require('node-polyfill-webpack-plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
@@ -40,7 +39,10 @@ function generatePluginConfig (production, server, pluginName, outputPath) {
     },
     entry: production
       ? { index: pluginPaths.js }
-      : { windowLoader: [paths.windowLoaderJs] },
+      : {
+          windowLoader: [paths.windowLoaderJs],
+          workerLoader: [paths.workerLoaderJs]
+        },
     output: {
       path: outputPath,
       filename: '[name].js',
@@ -60,27 +62,27 @@ function generatePluginConfig (production, server, pluginName, outputPath) {
         xhrViaZenApi$: resolveFromRoot('src/XMLHttpRequestViaZenAPI'),
         querystring: 'querystring-browser'
       },
-      extensions: ['.js', '.ts', '.json'],
+      extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       fallback: {
         path: false,
         fs: false,
         Buffer: false,
-        process: false,
+        process: false
       }
     },
     module: {
       noParse: /\.wasm$/,
       rules: [
-          {
-            test: /\.wasm$/,
-            // Tells WebPack that this module should be included as
-            // base64-encoded binary file and not as code
-            loader: 'base64-loader',
-            // Disables WebPack's opinion where WebAssembly should be,
-            // makes it think that it's not WebAssembly
-            //
-            // Error: WebAssembly module is included in initial chunk.
-            type: 'javascript/auto',
+        {
+          test: /\.wasm$/,
+          // Tells WebPack that this module should be included as
+          // base64-encoded binary file and not as code
+          loader: 'base64-loader',
+          // Disables WebPack's opinion where WebAssembly should be,
+          // makes it think that it's not WebAssembly
+          //
+          // Error: WebAssembly module is included in initial chunk.
+          type: 'javascript/auto'
         },
         {
           test: /ZenmoneyManifest.xml$/,
@@ -88,12 +90,12 @@ function generatePluginConfig (production, server, pluginName, outputPath) {
           loader: resolveFromRoot('scripts/plugin-manifest-loader.js')
         },
         {
-          test: /\.(js|ts)$/,
+          test: /\.[jt]sx?$/,
           include: paths.appSrc,
-          loader: require.resolve('babel-loader'),
-          options: production
-            ? {}
-            : { cacheDirectory: true }
+          loader: require.resolve('esbuild-loader'),
+          options: {
+            target: 'es2015'
+          }
         }
       ],
       parser: {
@@ -115,10 +117,6 @@ function generatePluginConfig (production, server, pluginName, outputPath) {
                 template: paths.windowLoaderHtml
               })]
         : [],
-      new ESLintPlugin({
-        context: paths.appSrc,
-        eslintPath: require.resolve('eslint')
-      }),
       new DefinePlugin({
         ...!production && process.env.LOG_PRIVATE_KEY && { LOG_PRIVATE_KEY: readLogPrivateKey() }
       }),
@@ -128,7 +126,6 @@ function generatePluginConfig (production, server, pluginName, outputPath) {
       new CaseSensitivePathsPlugin(),
       ...production
         ? [
-            new TerserPlugin({}),
             new WebpackObfuscator({
               optionsPreset: 'low-obfuscation',
               seed: 1985603785,
@@ -189,11 +186,18 @@ function generatePluginConfig (production, server, pluginName, outputPath) {
       hints: false
     },
     optimization: {
-      minimize: false
+      minimize: Boolean(production),
+      minimizer: production
+        ? [
+            new EsbuildPlugin({
+              target: 'es2015'
+            })
+          ]
+        : []
     },
     experiments: {
-      asyncWebAssembly: true,
-    },
+      asyncWebAssembly: true
+    }
   }
 }
 

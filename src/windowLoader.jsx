@@ -31,7 +31,9 @@ let state = {
   onPersistPluginDataConfirm: null
 }
 
-const updateUI = (Ui) => ReactDOM.render(<Ui {...state} />, rootElement)
+const updateUI = (Ui) => {
+  ReactDOM.render(<Ui {...state} />, rootElement)
+}
 const setState = (transform) => {
   state = transform(state)
   return updateUI(UI)
@@ -99,7 +101,7 @@ async function init () {
 
   try {
     clearCookies()
-    const worker = new Worker(new URL('./workerLoader', import.meta.url))
+    const worker = new Worker('./workerLoader.js')
 
     window.__worker__ = worker // prevents worker GC - allows setting breakpoints after worker ends execution
 
